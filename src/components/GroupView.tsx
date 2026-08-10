@@ -8,7 +8,6 @@ import {
   Globe,
   Share2,
   Check,
-  Sparkles,
   Trophy,
   Swords,
   Activity,
@@ -17,7 +16,6 @@ import {
   ShieldAlert,
   ArrowRight,
   RotateCcw,
-  Equal,
 } from "lucide-react";
 
 interface Profile {
@@ -115,6 +113,7 @@ export function GroupView({
 
   const [copied, setCopied] = useState(false);
   const [voting, setVoting] = useState(false);
+  const [showReviewMode, setShowReviewMode] = useState(false);
 
   // Extract group profiles
   const members: Profile[] = useMemo(() => {
@@ -136,13 +135,39 @@ export function GroupView({
     return pairs;
   }, [members]);
 
-  // Current pair index for active comparison session
-  const [pairIndex, setPairIndex] = useState(0);
+  // Index for active pair when reviewing / cycling
+  const [reviewPairIndex, setReviewPairIndex] = useState(0);
 
   const activeTrait =
     TRAITS.find((t) => t.key === selectedTraitKey) || TRAITS[0];
 
-  const currentPair = allPairs[pairIndex % Math.max(1, allPairs.length)];
+  // Helper: Find existing comparison for current user, group, trait, and pair [p1, p2]
+  const getExistingComparison = (p1: Profile, p2: Profile, traitKey = selectedTraitKey) => {
+    return allComparisons.find(
+      (c) =>
+        c.rater?.id === currentProfile.id &&
+        c.group?.id === group.id &&
+        c.trait === traitKey &&
+        ((c.winner?.id === p1.id && c.loser?.id === p2.id) ||
+          (c.winner?.id === p2.id && c.loser?.id === p1.id))
+    );
+  };
+
+  // Unvoted pairs for active trait
+  const unvotedPairs = useMemo(() => {
+    return allPairs.filter(([p1, p2]) => !getExistingComparison(p1, p2));
+  }, [allPairs, allComparisons, currentProfile.id, group.id, selectedTraitKey]);
+
+  // Current pair to present: unvoted pair first, or review pair if in review mode
+  const currentPair = useMemo(() => {
+    if (unvotedPairs.length > 0) {
+      return unvotedPairs[0];
+    }
+    if (showReviewMode && allPairs.length > 0) {
+      return allPairs[reviewPairIndex % allPairs.length];
+    }
+    return null;
+  }, [unvotedPairs, showReviewMode, allPairs, reviewPairIndex]);
 
   const handleCopyLink = () => {
     const link = `${window.location.origin}/?join=${group.inviteCode}`;
@@ -151,24 +176,39 @@ export function GroupView({
     setTimeout(() => setCopied(false), 2500);
   };
 
-  // Submit pairwise vote
+  // Submit pairwise vote (insert or update)
   const handleVote = async (winner: Profile, loser: Profile) => {
     if (voting) return;
     setVoting(true);
 
     try {
-      const compId = id();
-      await db.transact([
-        db.tx.comparisons[compId]
-          .create({
-            trait: selectedTraitKey,
-            updatedAt: Date.now(),
-          })
-          .link({ group: group.id })
-          .link({ rater: currentProfile.id })
-          .link({ winner: winner.id })
-          .link({ loser: loser.id }),
-      ]);
+      const existing = getExistingComparison(winner, loser);
+
+      if (existing) {
+        // Update existing comparison instead of creating duplicate
+        await db.transact([
+          db.tx.comparisons[existing.id]
+            .update({
+              updatedAt: Date.now(),
+            })
+            .link({ winner: winner.id })
+            .link({ loser: loser.id }),
+        ]);
+      } else {
+        // Create new comparison
+        const compId = id();
+        await db.transact([
+          db.tx.comparisons[compId]
+            .create({
+              trait: selectedTraitKey,
+              updatedAt: Date.now(),
+            })
+            .link({ group: group.id })
+            .link({ rater: currentProfile.id })
+            .link({ winner: winner.id })
+            .link({ loser: loser.id }),
+        ]);
+      }
 
       confetti({
         particleCount: 25,
@@ -176,8 +216,9 @@ export function GroupView({
         origin: { y: 0.7 },
       });
 
-      // Next pair
-      setPairIndex((prev) => prev + 1);
+      if (showReviewMode && allPairs.length > 0) {
+        setReviewPairIndex((prev) => (prev + 1) % allPairs.length);
+      }
     } catch (err) {
       console.error("Error submitting comparison vote:", err);
     } finally {
@@ -186,7 +227,9 @@ export function GroupView({
   };
 
   const handleNextPair = () => {
-    setPairIndex((prev) => prev + 1);
+    if (showReviewMode && allPairs.length > 0) {
+      setReviewPairIndex((prev) => (prev + 1) % allPairs.length);
+    }
   };
 
   // Filter comparisons based on Scope (Group vs Global)
@@ -199,9 +242,28 @@ export function GroupView({
     });
   }, [allComparisons, viewScope, group.id]);
 
-  // Compute rankings for a given trait
+  // Compute rankings for a given trait (deduplicating per rater + pair)
   const computeTraitRankings = (traitKey: string) => {
     const traitComps = scopedComparisons.filter((c) => c.trait === traitKey);
+
+    // Keep only the latest vote for each (rater, pairKey)
+    const latestMap = new Map<string, any>();
+    traitComps.forEach((c) => {
+      const raterId = c.rater?.id;
+      const wId = c.winner?.id;
+      const lId = c.loser?.id;
+      if (!raterId || !wId || !lId) return;
+
+      const pairKey = [wId, lId].sort().join("-");
+      const key = `${raterId}:${pairKey}`;
+
+      const existing = latestMap.get(key);
+      if (!existing || (c.updatedAt || 0) > (existing.updatedAt || 0)) {
+        latestMap.set(key, c);
+      }
+    });
+
+    const deduplicatedComps = Array.from(latestMap.values());
 
     const statsMap: Record<
       string,
@@ -213,7 +275,7 @@ export function GroupView({
       statsMap[m.id] = { wins: 0, losses: 0, total: 0 };
     });
 
-    traitComps.forEach((c) => {
+    deduplicatedComps.forEach((c) => {
       const wId = c.winner?.id;
       const lId = c.loser?.id;
 
@@ -241,6 +303,23 @@ export function GroupView({
         };
       })
       .sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+  };
+
+  // Switch to next trait that has unvoted pairs
+  const handleSwitchToNextUnvotedTrait = () => {
+    setShowReviewMode(false);
+    const traitWithUnvoted = TRAITS.find((t) => {
+      const countUnvoted = allPairs.filter(
+        ([p1, p2]) => !getExistingComparison(p1, p2, t.key)
+      ).length;
+      return countUnvoted > 0;
+    });
+
+    if (traitWithUnvoted) {
+      setSelectedTraitKey(traitWithUnvoted.key);
+    } else {
+      setActiveTab("rankings");
+    }
   };
 
   return (
@@ -361,7 +440,7 @@ export function GroupView({
       {/* TAB 1: Pairwise Comparison Arena */}
       {activeTab === "compare" && (
         <div className="max-w-3xl mx-auto space-y-8">
-          {/* Trait selector pills */}
+          {/* Trait selector pills with completion checkmarks */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 text-center">
               Choose Big 5 Trait to Compare
@@ -369,19 +448,31 @@ export function GroupView({
             <div className="flex flex-wrap justify-center gap-2">
               {TRAITS.map((t) => {
                 const isSelected = t.key === selectedTraitKey;
+                const isTraitComplete =
+                  allPairs.length > 0 &&
+                  allPairs.every(([p1, p2]) => Boolean(getExistingComparison(p1, p2, t.key)));
+
                 return (
                   <button
                     key={t.key}
-                    onClick={() => setSelectedTraitKey(t.key)}
+                    onClick={() => {
+                      setSelectedTraitKey(t.key);
+                      setShowReviewMode(false);
+                      setReviewPairIndex(0);
+                    }}
                     className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition border cursor-pointer flex items-center gap-2 ${
                       isSelected
                         ? `bg-slate-900 border-indigo-500 ${t.textColor} shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-500`
                         : "bg-slate-950/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
                     }`}
                   >
-                    <span className="w-5 h-5 rounded-md bg-slate-800 flex items-center justify-center font-bold text-[10px]">
-                      {t.letter}
-                    </span>
+                    {isTraitComplete ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : (
+                      <span className="w-5 h-5 rounded-md bg-slate-800 flex items-center justify-center font-bold text-[10px]">
+                        {t.letter}
+                      </span>
+                    )}
                     <span>{t.label}</span>
                   </button>
                 );
@@ -397,10 +488,10 @@ export function GroupView({
                 Need at least 2 members to compare
               </h3>
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Share your invite code <strong>{group.inviteCode}</strong> with friends so they can join and compare traits!
+                Share your invite link with friends so they can join and compare traits!
               </p>
             </div>
-          ) : (
+          ) : currentPair ? (
             <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl relative space-y-8">
               <div className="text-center space-y-2">
                 <span
@@ -461,18 +552,64 @@ export function GroupView({
                 })}
               </div>
 
-              {/* Pass / Skip controls */}
+              {/* Status footer */}
               <div className="pt-4 flex items-center justify-between border-t border-slate-800/80 text-xs text-slate-400">
                 <span>
-                  Matchup {pairIndex + 1} of {allPairs.length}
+                  {unvotedPairs.length > 0
+                    ? `Matchup ${allPairs.length - unvotedPairs.length + 1} of ${allPairs.length}`
+                    : `Reviewing Matchup ${(reviewPairIndex % Math.max(1, allPairs.length)) + 1} of ${allPairs.length}`}
                 </span>
 
+                {showReviewMode && (
+                  <button
+                    onClick={handleNextPair}
+                    className="flex items-center gap-1.5 hover:text-white transition cursor-pointer px-3 py-1.5 rounded-xl hover:bg-slate-800"
+                  >
+                    <span>Next Matchup</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Completion Card when all pairs for current trait are done */
+            <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center space-y-6 shadow-2xl">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-lg">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+
+              <div>
+                <h3 className="text-2xl font-extrabold text-white">
+                  Matchups Completed for {activeTrait.label}!
+                </h3>
+                <p className="text-sm text-slate-400 mt-2 max-w-md mx-auto">
+                  You have completed all {allPairs.length} pairwise comparisons in this group for <strong>{activeTrait.label}</strong>.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
                 <button
-                  onClick={handleNextPair}
-                  className="flex items-center gap-1.5 hover:text-white transition cursor-pointer px-3 py-1.5 rounded-xl hover:bg-slate-800"
+                  onClick={handleSwitchToNextUnvotedTrait}
+                  className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/20 transition cursor-pointer flex items-center justify-center gap-2"
                 >
-                  <span>Skip / Next Pair</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <span>Compare Next Trait</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("rankings")}
+                  className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-sm transition cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                  <span>View Leaderboards</span>
+                </button>
+
+                <button
+                  onClick={() => setShowReviewMode(true)}
+                  className="w-full sm:w-auto px-4 py-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white font-medium text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Review / Revote</span>
                 </button>
               </div>
             </div>
