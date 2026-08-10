@@ -44,7 +44,7 @@ export default function Home() {
             group: {},
           },
         }
-      : {}
+      : null
   );
 
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
