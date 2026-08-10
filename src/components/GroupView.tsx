@@ -115,7 +115,7 @@ export function GroupView({
 
   const [copied, setCopied] = useState(false);
   const [voting, setVoting] = useState(false);
-  const [localVotedKeys, setLocalVotedKeys] = useState<Set<string>>(new Set());
+  const [localVotes, setLocalVotes] = useState<Map<string, string>>(new Map());
   const [questionIndex, setQuestionIndex] = useState(0);
   const [votedHistory, setVotedHistory] = useState<
     { pairKey: string; traitKey: string; winnerId: string; loserId: string }[]
@@ -154,17 +154,17 @@ export function GroupView({
     return questions;
   }, [members]);
 
-  // Helper to check if a question (trait + pair) has been voted on
-  const hasVotedOnQuestion = (q: {
+  // Helper to get winner ID for a question from DB or local state
+  const getQuestionVote = (q: {
     key: string;
     trait: (typeof TRAITS)[number];
     pair: [Profile, Profile];
   }) => {
-    if (localVotedKeys.has(q.key)) return true;
-
+    if (!q) return null;
     const [p1, p2] = q.pair;
     const groupComps = group.comparisons || [];
-    const dbHit = groupComps.some(
+
+    const dbComp = groupComps.find(
       (c: any) =>
         c.rater?.id === currentProfile.id &&
         c.trait === q.trait.key &&
@@ -172,39 +172,42 @@ export function GroupView({
           (c.winner?.id === p2.id && c.loser?.id === p1.id))
     );
 
-    return Boolean(dbHit);
+    if (dbComp?.winner?.id) {
+      return dbComp.winner.id;
+    }
+
+    return localVotes.get(q.key) || null;
   };
 
-  // Filter unvoted questions
-  const unvotedQuestions = useMemo(() => {
-    return allQuestions.filter((q) => !hasVotedOnQuestion(q));
-  }, [allQuestions, group.comparisons, localVotedKeys, currentProfile.id]);
-
-  // Current active question (sequential traversal without looping!)
+  // Traversal across allQuestions (enables reviewing, seeing chosen answers, and switching choices!)
   const currentQuestion =
-    questionIndex < unvotedQuestions.length
-      ? unvotedQuestions[questionIndex]
+    questionIndex < allQuestions.length
+      ? allQuestions[questionIndex]
       : null;
 
-  const completedCount = allQuestions.length - unvotedQuestions.length;
+  const currentVoteWinnerId = currentQuestion
+    ? getQuestionVote(currentQuestion)
+    : null;
+
+  const answeredCount = useMemo(() => {
+    return allQuestions.filter((q) => Boolean(getQuestionVote(q))).length;
+  }, [allQuestions, group.comparisons, localVotes, currentProfile.id]);
+
   const progressPercent =
     allQuestions.length > 0
-      ? Math.min(
-          100,
-          Math.round(((completedCount + questionIndex) / allQuestions.length) * 100)
-        )
+      ? Math.round((answeredCount / allQuestions.length) * 100)
       : 0;
 
   // Trigger celebratory confetti ONLY when completing all questions
   useEffect(() => {
-    if (!currentQuestion && allQuestions.length > 0 && completedCount > 0) {
+    if (!currentQuestion && allQuestions.length > 0 && answeredCount > 0) {
       confetti({
         particleCount: 80,
         spread: 80,
         origin: { y: 0.6 },
       });
     }
-  }, [currentQuestion, allQuestions.length, completedCount]);
+  }, [currentQuestion, allQuestions.length, answeredCount]);
 
   const handleCopyLink = () => {
     const link = `${window.location.origin}/?join=${group.inviteCode}`;
@@ -213,16 +216,20 @@ export function GroupView({
     setTimeout(() => setCopied(false), 2500);
   };
 
-  // Submit pairwise vote (optimistically advances on its own)
+  // Submit pairwise vote (updates DB in real-time, advances to next question)
   const handleVote = async (winner: Profile, loser: Profile, traitKey: string) => {
     const pairKey = `${traitKey}:${[winner.id, loser.id].sort().join("-")}`;
 
-    // Optimistically mark as voted locally and save in history for undo
-    setLocalVotedKeys((prev) => new Set(prev).add(pairKey));
+    // Mark choice locally
+    setLocalVotes((prev) => new Map(prev).set(pairKey, winner.id));
+
     setVotedHistory((prev) => [
       ...prev,
       { pairKey, traitKey, winnerId: winner.id, loserId: loser.id },
     ]);
+
+    // Advance to next question
+    setQuestionIndex((prev) => Math.min(allQuestions.length, prev + 1));
 
     try {
       const groupComps = group.comparisons || [];
@@ -256,7 +263,6 @@ export function GroupView({
               .link({ loser: loser.id }),
           ]);
 
-      // 4-second timeout race to prevent transaction timeout modal/error
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error("Timeout")), 4000)
       );
@@ -280,17 +286,14 @@ export function GroupView({
 
     const lastVote = votedHistory[votedHistory.length - 1];
 
-    // Pop from history
     setVotedHistory((prev) => prev.slice(0, -1));
 
-    // Remove from local voted keys so question reappears in unvotedQuestions
-    setLocalVotedKeys((prev) => {
-      const next = new Set(prev);
+    setLocalVotes((prev) => {
+      const next = new Map(prev);
       next.delete(lastVote.pairKey);
       return next;
     });
 
-    // Delete comparison from InstantDB
     const groupComps = group.comparisons || [];
     const dbHit = groupComps.find(
       (c: any) =>
@@ -310,7 +313,7 @@ export function GroupView({
   };
 
   const handleResetVotes = async () => {
-    setLocalVotedKeys(new Set());
+    setLocalVotes(new Map());
     setVotedHistory([]);
     setQuestionIndex(0);
 
@@ -517,14 +520,16 @@ export function GroupView({
               {/* Progress Header */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-semibold">
-                  <span className="text-indigo-400">
-                    Question {completedCount + questionIndex + 1} of {allQuestions.length}
+                  <span className="text-indigo-400 font-bold">
+                    Question {questionIndex + 1} of {allQuestions.length}
                   </span>
-                  <span className="text-slate-400">{progressPercent}% Reviewed</span>
+                  <span className="text-slate-400 font-medium">
+                    {answeredCount} of {allQuestions.length} Answered ({progressPercent}%)
+                  </span>
                 </div>
                 <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
                   <div
-                    className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-300 rounded-full"
+                    className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 transition-all duration-300 rounded-full"
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
@@ -541,15 +546,16 @@ export function GroupView({
                   {currentQuestion.trait.question}
                 </h2>
                 <p className="text-xs text-slate-400 max-w-md mx-auto">
-                  Click on the person who exhibits more of this trait
+                  Click a person to choose or switch your selection
                 </p>
               </div>
 
-              {/* Pairwise Cards (Clicking advances on its own!) */}
+              {/* Pairwise Cards (Shows chosen selection and allows switching) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-2">
                 {currentQuestion.pair.map((person, idx) => {
                   const opponent = currentQuestion.pair[1 - idx];
                   const isSelf = person.id === currentProfile.id;
+                  const isSelected = currentVoteWinnerId === person.id;
 
                   return (
                     <button
@@ -558,9 +564,23 @@ export function GroupView({
                         handleVote(person, opponent, currentQuestion.trait.key)
                       }
                       disabled={voting}
-                      className="group p-8 rounded-3xl bg-slate-950/80 hover:bg-slate-950 border border-slate-800 hover:border-indigo-500/60 shadow-xl transition-all duration-300 text-center flex flex-col items-center justify-center gap-4 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                      className={`group p-8 rounded-3xl border shadow-xl transition-all duration-300 text-center flex flex-col items-center justify-center gap-4 cursor-pointer hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden ${
+                        isSelected
+                          ? "bg-emerald-950/40 border-emerald-500/80 shadow-emerald-500/20 ring-2 ring-emerald-500/40"
+                          : "bg-slate-950/80 hover:bg-slate-950 border-slate-800 hover:border-indigo-500/60"
+                      }`}
                     >
-                      <div className="w-20 h-20 rounded-full bg-slate-800 border-2 border-slate-700 overflow-hidden text-white font-extrabold text-2xl flex items-center justify-center shadow-lg group-hover:border-indigo-500 transition shrink-0">
+                      {/* Selected Choice Badge */}
+                      {isSelected && (
+                        <div className="absolute top-3 right-3 bg-emerald-500 text-slate-950 text-[11px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 shadow-md">
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          <span>SELECTED</span>
+                        </div>
+                      )}
+
+                      <div className={`w-20 h-20 rounded-full bg-slate-800 border-2 overflow-hidden text-white font-extrabold text-2xl flex items-center justify-center shadow-lg transition shrink-0 ${
+                        isSelected ? "border-emerald-400 ring-4 ring-emerald-500/30" : "border-slate-700 group-hover:border-indigo-500"
+                      }`}>
                         {person.avatarUrl ? (
                           <img
                             src={person.avatarUrl}
@@ -574,7 +594,7 @@ export function GroupView({
 
                       <div>
                         <div className="flex items-center justify-center gap-2">
-                          <h3 className="text-xl font-extrabold text-white group-hover:text-indigo-300 transition">
+                          <h3 className={`text-xl font-extrabold transition ${isSelected ? "text-emerald-300" : "text-white group-hover:text-indigo-300"}`}>
                             {person.name}
                           </h3>
                           {isSelf && (
@@ -583,8 +603,8 @@ export function GroupView({
                             </span>
                           )}
                         </div>
-                        <span className="inline-block mt-2 text-xs font-medium text-slate-400 group-hover:text-indigo-400 transition">
-                          Click to select →
+                        <span className={`inline-block mt-2 text-xs font-medium transition ${isSelected ? "text-emerald-400 font-bold" : "text-slate-400 group-hover:text-indigo-400"}`}>
+                          {isSelected ? "Currently Chosen ✓ (Click to re-select)" : "Click to select →"}
                         </span>
                       </div>
                     </button>
@@ -592,7 +612,7 @@ export function GroupView({
                 })}
               </div>
 
-              {/* Unsure / Skip, Unskip & Undo Buttons */}
+              {/* Action Buttons: Undo, Previous Question, Next / Skip */}
               <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
                 {votedHistory.length > 0 && (
                   <button
@@ -607,42 +627,33 @@ export function GroupView({
                 {questionIndex > 0 && (
                   <button
                     onClick={handleUnskip}
-                    className="flex items-center gap-2 bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 px-4 py-2.5 rounded-2xl text-xs font-semibold transition cursor-pointer shadow-sm"
+                    className="flex items-center gap-2 bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-slate-100 px-4 py-2.5 rounded-2xl text-xs font-semibold transition cursor-pointer shadow-sm"
                   >
                     <ArrowLeft className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Previous / Unskip</span>
+                    <span>Previous Question</span>
                   </button>
                 )}
 
                 <button
                   onClick={handleSkip}
-                  className="flex items-center gap-2 bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 px-5 py-2.5 rounded-2xl text-xs font-semibold transition cursor-pointer shadow-sm"
+                  className="flex items-center gap-2 bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-slate-100 px-5 py-2.5 rounded-2xl text-xs font-semibold transition cursor-pointer shadow-sm"
                 >
                   <HelpCircle className="w-4 h-4 text-slate-400" />
-                  <span>Unsure / Skip Question</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
+                  <span>{currentVoteWinnerId ? "Next Question" : "Skip Question / Unsure"}</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
                 </button>
               </div>
 
               {/* Footer controls */}
               <div className="pt-4 flex items-center justify-between border-t border-slate-800/80 text-xs text-slate-400">
                 <div className="flex items-center gap-2">
-                  {votedHistory.length > 0 && (
-                    <button
-                      onClick={handleUndo}
-                      className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition cursor-pointer px-3 py-1.5 rounded-xl hover:bg-slate-800"
-                    >
-                      <Undo2 className="w-3.5 h-3.5" />
-                      <span>Undo</span>
-                    </button>
-                  )}
                   {questionIndex > 0 && (
                     <button
                       onClick={handleUnskip}
                       className="flex items-center gap-1.5 hover:text-white transition cursor-pointer px-3 py-1.5 rounded-xl hover:bg-slate-800"
                     >
                       <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Previous Question</span>
+                      <span>Previous</span>
                     </button>
                   )}
                   <span>
@@ -654,13 +665,13 @@ export function GroupView({
                   onClick={handleSkip}
                   className="flex items-center gap-1.5 hover:text-white transition cursor-pointer px-3 py-1.5 rounded-xl hover:bg-slate-800"
                 >
-                  <span>Next / Skip</span>
+                  <span>{currentVoteWinnerId ? "Next" : "Skip"}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
           ) : (
-            /* Completion Screen when all questions reached */
+            /* Completion / Review Screen */
             <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center space-y-6 shadow-2xl">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30">
                 <CheckCircle2 className="w-8 h-8" />
@@ -668,37 +679,23 @@ export function GroupView({
 
               <div>
                 <h3 className="text-2xl sm:text-3xl font-extrabold text-white">
-                  {unvotedQuestions.length === 0
+                  {answeredCount === allQuestions.length
                     ? "All Questions Completed! 🎉"
-                    : "Questions Reviewed! 🎉"}
+                    : "Questionnaire Reviewed! 🎉"}
                 </h3>
                 <p className="text-sm text-slate-400 mt-2 max-w-md mx-auto">
-                  {unvotedQuestions.length === 0
-                    ? `You've answered all ${allQuestions.length} comparisons across the Big 5 personality traits for this group.`
-                    : `You answered ${completedCount} of ${allQuestions.length} comparisons and skipped ${unvotedQuestions.length} question${unvotedQuestions.length > 1 ? "s" : ""}.`}
+                  You answered {answeredCount} of {allQuestions.length} comparisons across the Big 5 personality traits.
                 </p>
               </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-                {votedHistory.length > 0 && (
-                  <button
-                    onClick={handleUndo}
-                    className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-amber-950/60 hover:bg-amber-900/80 border border-amber-800/80 text-amber-300 font-semibold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-lg shadow-amber-950/20"
-                  >
-                    <Undo2 className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Undo Last Answer</span>
-                  </button>
-                )}
-
-                {unvotedQuestions.length > 0 && (
-                  <button
-                    onClick={() => setQuestionIndex(0)}
-                    className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold text-sm shadow-lg shadow-amber-500/20 transition cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    <span>Review / Unskip Skipped Questions ({unvotedQuestions.length})</span>
-                  </button>
-                )}
+                <button
+                  onClick={() => setQuestionIndex(0)}
+                  className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold text-sm shadow-lg shadow-amber-500/20 transition cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Review & Switch Choices</span>
+                </button>
 
                 <button
                   onClick={() => setActiveTab("profiles")}
@@ -713,7 +710,7 @@ export function GroupView({
                   className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Restart / Revote</span>
+                  <span>Reset All My Votes</span>
                 </button>
               </div>
             </div>
