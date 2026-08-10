@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { db, id } from "@/lib/db";
 import confetti from "canvas-confetti";
 import { PersonalityForceGraph } from "@/components/PersonalityForceGraph";
@@ -15,6 +15,7 @@ import {
   ArrowRight,
   ArrowLeft,
   RotateCcw,
+  Undo2,
   Sparkles,
   HelpCircle,
   BarChart3,
@@ -116,6 +117,9 @@ export function GroupView({
   const [voting, setVoting] = useState(false);
   const [localVotedKeys, setLocalVotedKeys] = useState<Set<string>>(new Set());
   const [questionIndex, setQuestionIndex] = useState(0);
+  const [votedHistory, setVotedHistory] = useState<
+    { pairKey: string; traitKey: string; winnerId: string; loserId: string }[]
+  >([]);
 
   // Extract group profiles
   const members: Profile[] = useMemo(() => {
@@ -191,6 +195,17 @@ export function GroupView({
         )
       : 0;
 
+  // Trigger celebratory confetti ONLY when completing all questions
+  useEffect(() => {
+    if (!currentQuestion && allQuestions.length > 0 && completedCount > 0) {
+      confetti({
+        particleCount: 80,
+        spread: 80,
+        origin: { y: 0.6 },
+      });
+    }
+  }, [currentQuestion, allQuestions.length, completedCount]);
+
   const handleCopyLink = () => {
     const link = `${window.location.origin}/?join=${group.inviteCode}`;
     navigator.clipboard.writeText(link);
@@ -202,14 +217,12 @@ export function GroupView({
   const handleVote = async (winner: Profile, loser: Profile, traitKey: string) => {
     const pairKey = `${traitKey}:${[winner.id, loser.id].sort().join("-")}`;
 
-    // Optimistically mark as voted locally so UI advances on its own immediately!
+    // Optimistically mark as voted locally and save in history for undo
     setLocalVotedKeys((prev) => new Set(prev).add(pairKey));
-
-    confetti({
-      particleCount: 25,
-      spread: 50,
-      origin: { y: 0.7 },
-    });
+    setVotedHistory((prev) => [
+      ...prev,
+      { pairKey, traitKey, winnerId: winner.id, loserId: loser.id },
+    ]);
 
     try {
       const groupComps = group.comparisons || [];
@@ -228,7 +241,8 @@ export function GroupView({
                 updatedAt: Date.now(),
               })
               .unlink({ winner: existing.winner?.id, loser: existing.loser?.id })
-              .link({ winner: winner.id, loser: loser.id }),
+              .link({ winner: winner.id })
+              .link({ loser: loser.id }),
           ])
         : db.transact([
             db.tx.comparisons[id()]
@@ -261,8 +275,43 @@ export function GroupView({
     setQuestionIndex((prev) => Math.max(0, prev - 1));
   };
 
+  const handleUndo = async () => {
+    if (votedHistory.length === 0) return;
+
+    const lastVote = votedHistory[votedHistory.length - 1];
+
+    // Pop from history
+    setVotedHistory((prev) => prev.slice(0, -1));
+
+    // Remove from local voted keys so question reappears in unvotedQuestions
+    setLocalVotedKeys((prev) => {
+      const next = new Set(prev);
+      next.delete(lastVote.pairKey);
+      return next;
+    });
+
+    // Delete comparison from InstantDB
+    const groupComps = group.comparisons || [];
+    const dbHit = groupComps.find(
+      (c: any) =>
+        c.rater?.id === currentProfile.id &&
+        c.trait === lastVote.traitKey &&
+        ((c.winner?.id === lastVote.winnerId && c.loser?.id === lastVote.loserId) ||
+          (c.winner?.id === lastVote.loserId && c.loser?.id === lastVote.winnerId))
+    );
+
+    if (dbHit) {
+      try {
+        await db.transact([db.tx.comparisons[dbHit.id].delete()]);
+      } catch (err) {
+        console.warn("Failed to delete undone comparison:", err);
+      }
+    }
+  };
+
   const handleResetVotes = async () => {
     setLocalVotedKeys(new Set());
+    setVotedHistory([]);
     setQuestionIndex(0);
 
     const userComps = (group.comparisons || []).filter(
@@ -543,8 +592,18 @@ export function GroupView({
                 })}
               </div>
 
-              {/* Unsure / Skip & Unskip Question Buttons */}
+              {/* Unsure / Skip, Unskip & Undo Buttons */}
               <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                {votedHistory.length > 0 && (
+                  <button
+                    onClick={handleUndo}
+                    className="flex items-center gap-2 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/60 text-amber-300 hover:text-amber-200 px-4 py-2.5 rounded-2xl text-xs font-semibold transition cursor-pointer shadow-sm"
+                  >
+                    <Undo2 className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Undo Last Answer</span>
+                  </button>
+                )}
+
                 {questionIndex > 0 && (
                   <button
                     onClick={handleUnskip}
@@ -568,6 +627,15 @@ export function GroupView({
               {/* Footer controls */}
               <div className="pt-4 flex items-center justify-between border-t border-slate-800/80 text-xs text-slate-400">
                 <div className="flex items-center gap-2">
+                  {votedHistory.length > 0 && (
+                    <button
+                      onClick={handleUndo}
+                      className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition cursor-pointer px-3 py-1.5 rounded-xl hover:bg-slate-800"
+                    >
+                      <Undo2 className="w-3.5 h-3.5" />
+                      <span>Undo</span>
+                    </button>
+                  )}
                   {questionIndex > 0 && (
                     <button
                       onClick={handleUnskip}
@@ -612,6 +680,16 @@ export function GroupView({
               </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                {votedHistory.length > 0 && (
+                  <button
+                    onClick={handleUndo}
+                    className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-amber-950/60 hover:bg-amber-900/80 border border-amber-800/80 text-amber-300 font-semibold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-lg shadow-amber-950/20"
+                  >
+                    <Undo2 className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Undo Last Answer</span>
+                  </button>
+                )}
+
                 {unvotedQuestions.length > 0 && (
                   <button
                     onClick={() => setQuestionIndex(0)}
