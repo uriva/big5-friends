@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { db } from "@/lib/db";
 import { AuthScreen } from "@/components/AuthScreen";
 import { ProfileSetupModal } from "@/components/ProfileSetupModal";
+import { ProfileEditModal } from "@/components/ProfileEditModal";
 import { Navbar } from "@/components/Navbar";
 import { CreateGroupModal } from "@/components/CreateGroupModal";
 import { JoinGroupModal } from "@/components/JoinGroupModal";
@@ -53,6 +54,7 @@ export default function Home() {
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [pendingInviteGroup, setPendingInviteGroup] = useState<any | null>(null);
 
   // Derive current profile
@@ -124,7 +126,7 @@ export default function Home() {
     );
   }
 
-  // If user has no profile record yet, force profile setup modal
+  // If user has no profile record yet, force profile setup modal with picture upload
   if (!currentProfile) {
     return <ProfileSetupModal userId={user.id} email={user.email || ""} />;
   }
@@ -141,6 +143,7 @@ export default function Home() {
         onSelectGroup={(id) => setActiveGroupId(id)}
         onOpenCreateModal={() => setIsCreateOpen(true)}
         onOpenJoinModal={() => setIsJoinOpen(true)}
+        onOpenEditProfile={() => setIsEditProfileOpen(true)}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
@@ -216,6 +219,12 @@ export default function Home() {
         allGroups={allGroups}
         userMemberGroupIds={userGroupIds}
         onGroupJoined={(id) => setActiveGroupId(id)}
+      />
+
+      <ProfileEditModal
+        isOpen={isEditProfileOpen}
+        onClose={() => setIsEditProfileOpen(false)}
+        profile={currentProfile}
       />
 
       {/* Immediate Join Prompt Modal from Invite Link */}

@@ -9,18 +9,18 @@ import {
   UserPlus,
   LogOut,
   ChevronDown,
-  Globe,
-  User,
+  Edit3,
 } from "lucide-react";
 
 interface NavbarProps {
   userEmail: string;
-  profile: { id: string; name: string };
+  profile: { id: string; name: string; avatarUrl?: string };
   groups: any[];
   activeGroupId: string | null;
   onSelectGroup: (groupId: string | null) => void;
   onOpenCreateModal: () => void;
   onOpenJoinModal: () => void;
+  onOpenEditProfile: () => void;
 }
 
 export function Navbar({
@@ -31,6 +31,7 @@ export function Navbar({
   onSelectGroup,
   onOpenCreateModal,
   onOpenJoinModal,
+  onOpenEditProfile,
 }: NavbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -142,19 +143,32 @@ export function Navbar({
 
           {/* User Profile Badge & Signout */}
           <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-200">
-                {profile.name.charAt(0).toUpperCase()}
+            <button
+              onClick={onOpenEditProfile}
+              title="Edit Profile & Picture"
+              className="flex items-center gap-2 p-1 rounded-xl hover:bg-slate-800 transition cursor-pointer text-left group"
+            >
+              <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 overflow-hidden flex items-center justify-center text-xs font-bold text-slate-200 shrink-0">
+                {profile.avatarUrl ? (
+                  <img
+                    src={profile.avatarUrl}
+                    alt={profile.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  profile.name.charAt(0).toUpperCase()
+                )}
               </div>
-              <div className="hidden lg:block text-left">
-                <div className="text-xs font-semibold text-slate-200 leading-tight">
-                  {profile.name}
+              <div className="hidden lg:block">
+                <div className="text-xs font-semibold text-slate-200 leading-tight group-hover:text-indigo-400 transition flex items-center gap-1">
+                  <span>{profile.name}</span>
+                  <Edit3 className="w-3 h-3 text-slate-500 group-hover:text-indigo-400" />
                 </div>
                 <div className="text-[10px] text-slate-400 max-w-[100px] truncate leading-tight">
                   {userEmail}
                 </div>
               </div>
-            </div>
+            </button>
 
             <button
               onClick={() => db.auth.signOut()}

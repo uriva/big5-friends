@@ -23,6 +23,7 @@ import {
 interface Profile {
   id: string;
   name: string;
+  avatarUrl?: string;
 }
 
 interface GroupMember {
@@ -428,8 +429,16 @@ export function GroupView({
                       disabled={voting}
                       className="group p-8 rounded-3xl bg-slate-950/80 hover:bg-slate-950 border border-slate-800 hover:border-indigo-500/60 shadow-xl transition-all duration-300 text-center flex flex-col items-center justify-center gap-4 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
                     >
-                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white font-extrabold text-2xl flex items-center justify-center shadow-lg group-hover:shadow-indigo-500/30 transition">
-                        {person.name.charAt(0).toUpperCase()}
+                      <div className="w-20 h-20 rounded-full bg-slate-800 border-2 border-slate-700 overflow-hidden text-white font-extrabold text-2xl flex items-center justify-center shadow-lg group-hover:border-indigo-500 transition shrink-0">
+                        {person.avatarUrl ? (
+                          <img
+                            src={person.avatarUrl}
+                            alt={person.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          person.name.charAt(0).toUpperCase()
+                        )}
                       </div>
 
                       <div>
@@ -519,7 +528,7 @@ export function GroupView({
                         >
                           <div className="flex items-center gap-3">
                             <span
-                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center ${
+                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center shrink-0 ${
                                 rankIdx === 0
                                   ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
                                   : rankIdx === 1
@@ -531,6 +540,18 @@ export function GroupView({
                             >
                               #{rankIdx + 1}
                             </span>
+
+                            <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 overflow-hidden flex items-center justify-center text-xs font-bold text-slate-200 shrink-0">
+                              {r.profile.avatarUrl ? (
+                                <img
+                                  src={r.profile.avatarUrl}
+                                  alt={r.profile.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                r.profile.name.charAt(0).toUpperCase()
+                              )}
+                            </div>
 
                             <div>
                               <div className="flex items-center gap-2">
