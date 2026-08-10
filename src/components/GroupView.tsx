@@ -312,25 +312,6 @@ export function GroupView({
     }
   };
 
-  const handleResetVotes = async () => {
-    setLocalVotes(new Map());
-    setVotedHistory([]);
-    setQuestionIndex(0);
-
-    const userComps = (group.comparisons || []).filter(
-      (c: any) => c.rater?.id === currentProfile.id
-    );
-
-    if (userComps.length > 0) {
-      try {
-        const txs = userComps.map((c: any) => db.tx.comparisons[c.id].delete());
-        await db.transact(txs);
-      } catch (err) {
-        console.warn("Failed to delete user comparisons:", err);
-      }
-    }
-  };
-
   // Filter comparisons based on Scope (Group vs Global)
   const scopedComparisons = useMemo(() => {
     return allComparisons.filter((c) => {
@@ -703,14 +684,6 @@ export function GroupView({
                 >
                   <BarChart3 className="w-4 h-4 text-indigo-300" />
                   <span>View Trait Profiles & Character Stats</span>
-                </button>
-
-                <button
-                  onClick={handleResetVotes}
-                  className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset All My Votes</span>
                 </button>
               </div>
             </div>
