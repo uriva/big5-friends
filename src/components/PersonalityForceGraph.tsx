@@ -311,8 +311,24 @@ export function PersonalityForceGraph({
         ctx.clip();
 
         if (n.imgElement && n.imgElement.complete && n.imgElement.naturalWidth > 0) {
+          const img = n.imgElement;
+          const nw = img.naturalWidth;
+          const nh = img.naturalHeight;
+
+          // Object-fit: cover center crop to prevent image smearing or stretching
+          const minDim = Math.min(nw, nh);
+          const sx = (nw - minDim) / 2;
+          const sy = (nh - minDim) / 2;
+
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+
           ctx.drawImage(
-            n.imgElement,
+            img,
+            sx,
+            sy,
+            minDim,
+            minDim,
             n.x - n.radius,
             n.y - n.radius,
             n.radius * 2,
