@@ -17,6 +17,7 @@ import {
   ArrowRight,
   RotateCcw,
   Sparkles,
+  HelpCircle,
 } from "lucide-react";
 
 interface Profile {
@@ -500,6 +501,18 @@ export function GroupView({
                     </button>
                   );
                 })}
+              </div>
+
+              {/* Unsure / Skip Question Button */}
+              <div className="flex justify-center pt-1">
+                <button
+                  onClick={handleSkip}
+                  className="flex items-center gap-2 bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 px-5 py-2.5 rounded-2xl text-xs font-semibold transition cursor-pointer shadow-sm"
+                >
+                  <HelpCircle className="w-4 h-4 text-slate-400" />
+                  <span>Unsure / Don't Know Them Well Enough (Skip)</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
+                </button>
               </div>
 
               {/* Footer skip control */}
