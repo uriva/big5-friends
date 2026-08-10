@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { db, id } from "@/lib/db";
 import confetti from "canvas-confetti";
+import { PersonalityForceGraph } from "@/components/PersonalityForceGraph";
 import {
   Users,
   Globe,
@@ -332,6 +333,28 @@ export function GroupView({
       .sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
   };
 
+  // Build trait stats map for Personality Force Graph
+  const traitStatsMap = useMemo(() => {
+    const map: Record<
+      string,
+      Record<string, { wins: number; total: number; winRate: number }>
+    > = {};
+
+    TRAITS.forEach((t) => {
+      const rankings = computeTraitRankings(t.key);
+      map[t.key] = {};
+      rankings.forEach((r) => {
+        map[t.key][r.profile.id] = {
+          wins: r.wins,
+          total: r.total,
+          winRate: r.winRate,
+        };
+      });
+    });
+
+    return map;
+  }, [scopedComparisons, members]);
+
   return (
     <div className="space-y-8 pb-16">
       {/* Header Banner */}
@@ -568,7 +591,7 @@ export function GroupView({
         </div>
       )}
 
-      {/* TAB 2: Trait Leaderboards */}
+      {/* TAB 2: Trait Leaderboards & Similarity Force Graph */}
       {activeTab === "rankings" && (
         <div className="space-y-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-slate-400 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
@@ -605,6 +628,14 @@ export function GroupView({
               </button>
             </div>
           </div>
+
+          {/* Personality Similarity Force Graph */}
+          {members.length >= 2 && (
+            <PersonalityForceGraph
+              members={members}
+              traitStatsMap={traitStatsMap}
+            />
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {TRAITS.map((trait) => {
