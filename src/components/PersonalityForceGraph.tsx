@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
-import { Network, Sparkles, RefreshCw } from "lucide-react";
+import { Network, Sparkles } from "lucide-react";
 
 interface Profile {
   id: string;
@@ -19,6 +19,7 @@ interface Node {
   vy: number;
   radius: number;
   profile: Profile;
+  imgElement?: HTMLImageElement;
 }
 
 interface Link {
@@ -39,13 +40,32 @@ export function PersonalityForceGraph({
   members,
   traitStatsMap,
 }: PersonalityForceGraphProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [hoveredNode, setHoveredNode] = useState<Node | null>(null);
-  const [hoveredLink, setHoveredLink] = useState<{
-    sourceName: string;
-    targetName: string;
-    similarity: number;
-  } | null>(null);
+
+  const [dimensions, setDimensions] = useState({ width: 700, height: 420 });
+
+  // Handle responsive resizing
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width } = entry.contentRect;
+        if (width > 0) {
+          setDimensions({
+            width: Math.max(320, Math.floor(width)),
+            height: Math.min(480, Math.max(360, Math.floor(width * 0.55))),
+          });
+        }
+      }
+    });
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
   // Compute pairwise similarities (0 - 100%) between all members
   const links: Link[] = useMemo(() => {
@@ -91,19 +111,26 @@ export function PersonalityForceGraph({
     return linkList;
   }, [members, traitStatsMap]);
 
-  // Simulation state
   const nodesRef = useRef<Node[]>([]);
   const draggedNodeRef = useRef<Node | null>(null);
 
-  // Initialize node positions
+  // Initialize node positions & preload avatar images
   useEffect(() => {
-    const width = 600;
-    const height = 400;
-    const radius = 28;
+    const width = dimensions.width;
+    const height = dimensions.height;
+    const radius = 32;
 
     nodesRef.current = members.map((m, idx) => {
       const angle = (idx / Math.max(1, members.length)) * 2 * Math.PI;
-      const dist = 120 + Math.random() * 20;
+      const dist = 110 + Math.random() * 20;
+
+      let imgElement: HTMLImageElement | undefined;
+      if (m.avatarUrl) {
+        const img = new Image();
+        img.src = m.avatarUrl;
+        imgElement = img;
+      }
+
       return {
         id: m.id,
         name: m.name,
@@ -114,11 +141,12 @@ export function PersonalityForceGraph({
         vy: 0,
         radius,
         profile: m,
+        imgElement,
       };
     });
-  }, [members]);
+  }, [members, dimensions]);
 
-  // Force simulation loop
+  // High-DPI Canvas Force Simulation Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -127,8 +155,13 @@ export function PersonalityForceGraph({
 
     let animId: number;
 
-    const width = canvas.width;
-    const height = canvas.height;
+    const cssWidth = dimensions.width;
+    const cssHeight = dimensions.height;
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+
+    // Set high-DPI buffer dimensions
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
 
     const simulate = () => {
       const nodes = nodesRef.current;
@@ -138,10 +171,10 @@ export function PersonalityForceGraph({
         const n1 = nodes[i];
 
         // 1. Center attraction force
-        const dxCenter = width / 2 - n1.x;
-        const dyCenter = height / 2 - n1.y;
-        n1.vx += dxCenter * 0.002;
-        n1.vy += dyCenter * 0.002;
+        const dxCenter = cssWidth / 2 - n1.x;
+        const dyCenter = cssHeight / 2 - n1.y;
+        n1.vx += dxCenter * 0.0025;
+        n1.vy += dyCenter * 0.0025;
 
         // 2. Node-node repulsion force
         for (let j = i + 1; j < nodes.length; j++) {
@@ -149,10 +182,10 @@ export function PersonalityForceGraph({
           const dx = n2.x - n1.x;
           const dy = n2.y - n1.y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const minDist = n1.radius + n2.radius + 60;
+          const minDist = n1.radius + n2.radius + 70;
 
           if (dist < minDist) {
-            const force = (minDist - dist) * 0.05;
+            const force = (minDist - dist) * 0.06;
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
             n1.vx -= fx;
@@ -174,8 +207,8 @@ export function PersonalityForceGraph({
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 
         // Higher similarity = shorter target distance (pull closer)
-        const targetDist = 200 - (link.similarity / 100) * 120; // 80px to 200px
-        const force = (dist - targetDist) * 0.02;
+        const targetDist = 220 - (link.similarity / 100) * 130; // 90px to 220px
+        const force = (dist - targetDist) * 0.025;
 
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;
@@ -186,29 +219,30 @@ export function PersonalityForceGraph({
         n2.vy -= fy;
       });
 
-      // Update positions with friction & boundary damping
+      // Update positions
       nodes.forEach((n) => {
         if (draggedNodeRef.current === n) return;
 
-        n.vx *= 0.85; // friction
-        n.vy *= 0.85;
+        n.vx *= 0.82; // friction
+        n.vy *= 0.82;
 
         n.x += n.vx;
         n.y += n.vy;
 
-        // Keep inside bounds
-        const pad = n.radius + 10;
-        n.x = Math.max(pad, Math.min(width - pad, n.x));
-        n.y = Math.max(pad, Math.min(height - pad, n.y));
+        const pad = n.radius + 15;
+        n.x = Math.max(pad, Math.min(cssWidth - pad, n.x));
+        n.y = Math.max(pad, Math.min(cssHeight - pad, n.y));
       });
 
-      // RENDER CANVAS
-      ctx.clearRect(0, 0, width, height);
+      // RENDER
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, cssWidth, cssHeight);
 
-      // Draw background grid dots
+      // Background grid dots
       ctx.fillStyle = "rgba(51, 65, 85, 0.25)";
-      for (let x = 20; x < width; x += 30) {
-        for (let y = 20; y < height; y += 30) {
+      for (let x = 20; x < cssWidth; x += 30) {
+        for (let y = 20; y < cssHeight; y += 30) {
           ctx.fillRect(x, y, 1.5, 1.5);
         }
       }
@@ -226,33 +260,33 @@ export function PersonalityForceGraph({
         ctx.moveTo(n1.x, n1.y);
         ctx.lineTo(n2.x, n2.y);
 
-        // Line style based on similarity
-        const alpha = isHovered
-          ? 0.8
-          : 0.15 + (link.similarity / 100) * 0.4;
-        const lineWidth = 1 + (link.similarity / 100) * 3;
+        const alpha = isHovered ? 0.9 : 0.2 + (link.similarity / 100) * 0.45;
+        const lineWidth = 1.5 + (link.similarity / 100) * 3;
 
         ctx.strokeStyle =
           link.similarity >= 80
-            ? `rgba(52, 211, 153, ${alpha})` // Emerald
+            ? `rgba(52, 211, 153, ${alpha})`
             : link.similarity >= 60
-            ? `rgba(99, 102, 241, ${alpha})` // Indigo
-            : `rgba(148, 163, 184, ${alpha})`; // Muted
+            ? `rgba(99, 102, 241, ${alpha})`
+            : `rgba(148, 163, 184, ${alpha})`;
 
         ctx.lineWidth = lineWidth;
         ctx.stroke();
 
-        // Draw similarity percentage pill in middle of line
+        // Draw similarity pill in center of line
         const midX = (n1.x + n2.x) / 2;
         const midY = (n1.y + n2.y) / 2;
 
-        ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+        ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
         ctx.beginPath();
-        ctx.arc(midX, midY, 12, 0, Math.PI * 2);
+        ctx.arc(midX, midY, 14, 0, Math.PI * 2);
         ctx.fill();
+        ctx.strokeStyle = "rgba(51, 65, 85, 0.8)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
-        ctx.fillStyle = "#cbd5e1";
-        ctx.font = "bold 9px sans-serif";
+        ctx.fillStyle = "#e2e8f0";
+        ctx.font = "bold 10px system-ui, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(`${link.similarity}%`, midX, midY);
@@ -262,39 +296,73 @@ export function PersonalityForceGraph({
       nodes.forEach((n) => {
         const isSelected = hoveredNode?.id === n.id;
 
-        // Node Outer Glow Ring
+        // Glow ring if selected
         if (isSelected) {
           ctx.beginPath();
           ctx.arc(n.x, n.y, n.radius + 6, 0, Math.PI * 2);
-          ctx.fillStyle = "rgba(99, 102, 241, 0.3)";
+          ctx.fillStyle = "rgba(99, 102, 241, 0.35)";
           ctx.fill();
         }
 
-        // Node Circle Background
+        // Node Circle Clip Area for Avatar Photo / Initials
+        ctx.save();
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
-        ctx.fillStyle = "#1e293b";
-        ctx.fill();
+        ctx.clip();
+
+        if (n.imgElement && n.imgElement.complete && n.imgElement.naturalWidth > 0) {
+          ctx.drawImage(
+            n.imgElement,
+            n.x - n.radius,
+            n.y - n.radius,
+            n.radius * 2,
+            n.radius * 2
+          );
+        } else {
+          ctx.fillStyle = "#1e293b";
+          ctx.fill();
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 18px system-ui, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(n.name.charAt(0).toUpperCase(), n.x, n.y);
+        }
+        ctx.restore();
+
+        // Node Circle Outer Border
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
         ctx.strokeStyle = isSelected ? "#818cf8" : "#475569";
-        ctx.lineWidth = isSelected ? 3 : 2;
+        ctx.lineWidth = isSelected ? 3.5 : 2;
         ctx.stroke();
 
-        // Initials inside node
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 16px sans-serif";
+        // Label Tag
+        ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
+        const labelText = n.name;
+        ctx.font = "bold 12px system-ui, sans-serif";
+        const textWidth = ctx.measureText(labelText).width;
+        const labelWidth = textWidth + 18;
+
+        ctx.beginPath();
+        ctx.roundRect(
+          n.x - labelWidth / 2,
+          n.y + n.radius + 6,
+          labelWidth,
+          20,
+          6
+        );
+        ctx.fill();
+        ctx.strokeStyle = "rgba(51, 65, 85, 0.6)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = isSelected ? "#a5b4fc" : "#f1f5f9";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(n.name.charAt(0).toUpperCase(), n.x, n.y - 1);
-
-        // Name Tag Label below node
-        ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
-        const labelWidth = ctx.measureText(n.name).width + 16;
-        ctx.fillRect(n.x - labelWidth / 2, n.y + n.radius + 4, labelWidth, 18);
-
-        ctx.fillStyle = isSelected ? "#a5b4fc" : "#e2e8f0";
-        ctx.font = "bold 11px sans-serif";
-        ctx.fillText(n.name, n.x, n.y + n.radius + 13);
+        ctx.fillText(labelText, n.x, n.y + n.radius + 16);
       });
+
+      ctx.restore();
 
       animId = requestAnimationFrame(simulate);
     };
@@ -304,9 +372,9 @@ export function PersonalityForceGraph({
     return () => {
       cancelAnimationFrame(animId);
     };
-  }, [links, hoveredNode]);
+  }, [dimensions, links, hoveredNode]);
 
-  // Handle Mouse Hover & Dragging
+  // Pointer event handlers
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -339,7 +407,6 @@ export function PersonalityForceGraph({
       return;
     }
 
-    // Hover detection
     const hovered = nodesRef.current.find((n) => {
       const dx = n.x - mx;
       const dy = n.y - my;
@@ -361,7 +428,7 @@ export function PersonalityForceGraph({
     <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center shrink-0">
             <Network className="w-5 h-5" />
           </div>
           <div>
@@ -376,24 +443,26 @@ export function PersonalityForceGraph({
         </div>
       </div>
 
-      {/* Canvas Interactive Arena */}
-      <div className="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800/80 flex items-center justify-center">
+      {/* Responsive Canvas Container */}
+      <div
+        ref={containerRef}
+        className="w-full relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800/80 flex items-center justify-center"
+      >
         <canvas
           ref={canvasRef}
-          width={600}
-          height={380}
+          style={{ width: `${dimensions.width}px`, height: `${dimensions.height}px` }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          className="w-full h-[380px] cursor-grab active:cursor-grabbing touch-none"
+          className="cursor-grab active:cursor-grabbing touch-none block"
         />
 
         {/* Hover Information Badge */}
         {hoveredNode && (
-          <div className="absolute top-3 left-3 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl px-3.5 py-2 text-xs shadow-xl text-slate-200">
+          <div className="absolute top-3 left-3 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl px-3.5 py-2 text-xs shadow-xl text-slate-200 pointer-events-none">
             <span className="font-bold text-indigo-400">{hoveredNode.name}</span>
             <span className="text-[10px] text-slate-400 block mt-0.5">
-              Drag node to move in force simulation
+              Drag node to reposition in simulation
             </span>
           </div>
         )}
