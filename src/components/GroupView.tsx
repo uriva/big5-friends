@@ -143,10 +143,11 @@ export function GroupView({
 
   const currentPair = allPairs[pairIndex % Math.max(1, allPairs.length)];
 
-  const handleCopyCode = () => {
-    navigator.clipboard.writeText(group.inviteCode);
+  const handleCopyLink = () => {
+    const link = `${window.location.origin}/?join=${group.inviteCode}`;
+    navigator.clipboard.writeText(link);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 2500);
   };
 
   // Submit pairwise vote
@@ -265,26 +266,28 @@ export function GroupView({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {/* Invite Code */}
-            <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-800 rounded-2xl px-4 py-2.5">
-              <span className="text-xs text-slate-400 font-medium">
-                Invite Code:
-              </span>
-              <span className="font-mono font-bold text-sm text-indigo-400 tracking-wider">
-                {group.inviteCode}
-              </span>
-              <button
-                onClick={handleCopyCode}
-                className="ml-1 p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
-                title="Copy Invite Code"
-              >
-                {copied ? (
+            {/* Copy Invite Link Button */}
+            <button
+              onClick={handleCopyLink}
+              className="flex items-center gap-2 bg-slate-950/90 hover:bg-slate-900 border border-slate-800 hover:border-indigo-500/50 rounded-2xl px-4 py-2.5 transition cursor-pointer"
+              title="Copy Invite Link"
+            >
+              {copied ? (
+                <>
                   <Check className="w-4 h-4 text-emerald-400" />
-                ) : (
-                  <Share2 className="w-4 h-4" />
-                )}
-              </button>
-            </div>
+                  <span className="text-xs font-bold text-emerald-400">
+                    Invite Link Copied!
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-4 h-4 text-indigo-400" />
+                  <span className="text-xs text-slate-300 font-medium">
+                    Invite Link: <strong className="font-mono text-indigo-400">{group.inviteCode}</strong>
+                  </span>
+                </>
+              )}
+            </button>
 
             {/* Scope Switcher: Group vs Global */}
             <div className="bg-slate-950/90 p-1 border border-slate-800 rounded-2xl flex items-center gap-1">

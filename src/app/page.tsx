@@ -7,6 +7,7 @@ import { ProfileSetupModal } from "@/components/ProfileSetupModal";
 import { Navbar } from "@/components/Navbar";
 import { CreateGroupModal } from "@/components/CreateGroupModal";
 import { JoinGroupModal } from "@/components/JoinGroupModal";
+import { InvitePromptModal } from "@/components/InvitePromptModal";
 import { GroupView } from "@/components/GroupView";
 import { Users, Plus, UserPlus, Sparkles, Loader2 } from "lucide-react";
 
@@ -21,6 +22,7 @@ export default function Home() {
             user: {},
             memberships: {
               group: {
+                creator: {},
                 members: {
                   profile: {},
                 },
@@ -28,6 +30,7 @@ export default function Home() {
             },
           },
           groups: {
+            creator: {},
             members: {
               profile: {},
             },
@@ -50,6 +53,7 @@ export default function Home() {
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
+  const [pendingInviteGroup, setPendingInviteGroup] = useState<any | null>(null);
 
   // Derive current profile
   const profiles = data?.profiles || [];
@@ -65,6 +69,30 @@ export default function Home() {
     .filter(Boolean);
 
   const userGroupIds = userGroups.map((g: any) => g.id);
+
+  // Check URL search param `?join=CODE` to prompt immediate joining
+  useEffect(() => {
+    if (!currentProfile || allGroups.length === 0) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const joinCode = params.get("join")?.trim().toUpperCase();
+
+    if (joinCode) {
+      const targetGroup = allGroups.find(
+        (g: any) => g.inviteCode && g.inviteCode.toUpperCase() === joinCode
+      );
+
+      if (targetGroup) {
+        if (userGroupIds.includes(targetGroup.id)) {
+          // Already a member -> switch directly to this group
+          setActiveGroupId(targetGroup.id);
+        } else {
+          // Not a member yet -> open Invite Prompt Modal immediately!
+          setPendingInviteGroup(targetGroup);
+        }
+      }
+    }
+  }, [currentProfile, allGroups, userGroupIds]);
 
   // Set default active group
   useEffect(() => {
@@ -189,6 +217,16 @@ export default function Home() {
         userMemberGroupIds={userGroupIds}
         onGroupJoined={(id) => setActiveGroupId(id)}
       />
+
+      {/* Immediate Join Prompt Modal from Invite Link */}
+      {pendingInviteGroup && (
+        <InvitePromptModal
+          group={pendingInviteGroup}
+          profileId={currentProfile.id}
+          onJoined={(id) => setActiveGroupId(id)}
+          onClose={() => setPendingInviteGroup(null)}
+        />
+      )}
     </div>
   );
 }
