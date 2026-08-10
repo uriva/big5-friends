@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Info,
   ArrowRight,
+  ArrowLeft,
   RotateCcw,
   Sparkles,
   HelpCircle,
@@ -114,7 +115,7 @@ export function GroupView({
   const [copied, setCopied] = useState(false);
   const [voting, setVoting] = useState(false);
   const [localVotedKeys, setLocalVotedKeys] = useState<Set<string>>(new Set());
-  const [skipOffset, setSkipOffset] = useState(0);
+  const [questionIndex, setQuestionIndex] = useState(0);
 
   // Extract group profiles
   const members: Profile[] = useMemo(() => {
@@ -175,16 +176,19 @@ export function GroupView({
     return allQuestions.filter((q) => !hasVotedOnQuestion(q));
   }, [allQuestions, group.comparisons, localVotedKeys, currentProfile.id]);
 
-  // Current active question
+  // Current active question (sequential traversal without looping!)
   const currentQuestion =
-    unvotedQuestions.length > 0
-      ? unvotedQuestions[skipOffset % unvotedQuestions.length]
+    questionIndex < unvotedQuestions.length
+      ? unvotedQuestions[questionIndex]
       : null;
 
   const completedCount = allQuestions.length - unvotedQuestions.length;
   const progressPercent =
     allQuestions.length > 0
-      ? Math.round((completedCount / allQuestions.length) * 100)
+      ? Math.min(
+          100,
+          Math.round(((completedCount + questionIndex) / allQuestions.length) * 100)
+        )
       : 0;
 
   const handleCopyLink = () => {
@@ -250,12 +254,16 @@ export function GroupView({
   };
 
   const handleSkip = () => {
-    setSkipOffset((prev) => prev + 1);
+    setQuestionIndex((prev) => prev + 1);
+  };
+
+  const handleUnskip = () => {
+    setQuestionIndex((prev) => Math.max(0, prev - 1));
   };
 
   const handleResetVotes = () => {
     setLocalVotedKeys(new Set());
-    setSkipOffset(0);
+    setQuestionIndex(0);
   };
 
   // Filter comparisons based on Scope (Group vs Global)
@@ -448,9 +456,9 @@ export function GroupView({
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-semibold">
                   <span className="text-indigo-400">
-                    Question {completedCount + 1} of {allQuestions.length}
+                    Question {completedCount + questionIndex + 1} of {allQuestions.length}
                   </span>
-                  <span className="text-slate-400">{progressPercent}% Completed</span>
+                  <span className="text-slate-400">{progressPercent}% Reviewed</span>
                 </div>
                 <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
                   <div
@@ -522,35 +530,56 @@ export function GroupView({
                 })}
               </div>
 
-              {/* Unsure / Skip Question Button */}
-              <div className="flex justify-center pt-1">
+              {/* Unsure / Skip & Unskip Question Buttons */}
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                {questionIndex > 0 && (
+                  <button
+                    onClick={handleUnskip}
+                    className="flex items-center gap-2 bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 px-4 py-2.5 rounded-2xl text-xs font-semibold transition cursor-pointer shadow-sm"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Previous / Unskip</span>
+                  </button>
+                )}
+
                 <button
                   onClick={handleSkip}
                   className="flex items-center gap-2 bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 px-5 py-2.5 rounded-2xl text-xs font-semibold transition cursor-pointer shadow-sm"
                 >
                   <HelpCircle className="w-4 h-4 text-slate-400" />
-                  <span>Unsure / Don't Know Them Well Enough (Skip)</span>
+                  <span>Unsure / Skip Question</span>
                   <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
                 </button>
               </div>
 
-              {/* Footer skip control */}
+              {/* Footer controls */}
               <div className="pt-4 flex items-center justify-between border-t border-slate-800/80 text-xs text-slate-400">
-                <span>
-                  Trait: <strong>{currentQuestion.trait.label}</strong>
-                </span>
+                <div className="flex items-center gap-2">
+                  {questionIndex > 0 && (
+                    <button
+                      onClick={handleUnskip}
+                      className="flex items-center gap-1.5 hover:text-white transition cursor-pointer px-3 py-1.5 rounded-xl hover:bg-slate-800"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Previous Question</span>
+                    </button>
+                  )}
+                  <span>
+                    Trait: <strong>{currentQuestion.trait.label}</strong>
+                  </span>
+                </div>
 
                 <button
                   onClick={handleSkip}
                   className="flex items-center gap-1.5 hover:text-white transition cursor-pointer px-3 py-1.5 rounded-xl hover:bg-slate-800"
                 >
-                  <span>Next Question</span>
+                  <span>Next / Skip</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
           ) : (
-            /* Completion Screen when ALL questions & pairs across all Big 5 traits are done! */
+            /* Completion Screen when all questions reached */
             <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center space-y-6 shadow-2xl">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30">
                 <CheckCircle2 className="w-8 h-8" />
@@ -558,14 +587,28 @@ export function GroupView({
 
               <div>
                 <h3 className="text-2xl sm:text-3xl font-extrabold text-white">
-                  All Questions Completed! 🎉
+                  {unvotedQuestions.length === 0
+                    ? "All Questions Completed! 🎉"
+                    : "Questions Reviewed! 🎉"}
                 </h3>
                 <p className="text-sm text-slate-400 mt-2 max-w-md mx-auto">
-                  You've answered all {allQuestions.length} comparisons across the Big 5 personality traits for this group.
+                  {unvotedQuestions.length === 0
+                    ? `You've answered all ${allQuestions.length} comparisons across the Big 5 personality traits for this group.`
+                    : `You answered ${completedCount} of ${allQuestions.length} comparisons and skipped ${unvotedQuestions.length} question${unvotedQuestions.length > 1 ? "s" : ""}.`}
                 </p>
               </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                {unvotedQuestions.length > 0 && (
+                  <button
+                    onClick={() => setQuestionIndex(0)}
+                    className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold text-sm shadow-lg shadow-amber-500/20 transition cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Review / Unskip Skipped Questions ({unvotedQuestions.length})</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => setActiveTab("profiles")}
                   className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold text-sm shadow-lg shadow-indigo-500/20 transition cursor-pointer flex items-center justify-center gap-2"
