@@ -9,16 +9,15 @@ import {
   Globe,
   Share2,
   Check,
-  Trophy,
   Swords,
-  Activity,
   CheckCircle2,
   Info,
-  ShieldAlert,
   ArrowRight,
   RotateCcw,
   Sparkles,
   HelpCircle,
+  BarChart3,
+  Sliders,
 } from "lucide-react";
 
 interface Profile {
@@ -110,9 +109,7 @@ export function GroupView({
   allComparisons,
 }: GroupViewProps) {
   const [viewScope, setViewScope] = useState<"group" | "global">("group");
-  const [activeTab, setActiveTab] = useState<"compare" | "rankings">(
-    "compare"
-  );
+  const [activeTab, setActiveTab] = useState<"compare" | "profiles">("compare");
 
   const [copied, setCopied] = useState(false);
   const [voting, setVoting] = useState(false);
@@ -242,8 +239,8 @@ export function GroupView({
       }
 
       confetti({
-        particleCount: 30,
-        spread: 60,
+        particleCount: 25,
+        spread: 50,
         origin: { y: 0.7 },
       });
     } catch (err) {
@@ -333,7 +330,7 @@ export function GroupView({
       .sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
   };
 
-  // Build trait stats map for Personality Force Graph
+  // Build trait stats map for Personality Force Graph & RPG Character Cards
   const traitStatsMap = useMemo(() => {
     const map: Record<
       string,
@@ -420,15 +417,15 @@ export function GroupView({
         </button>
 
         <button
-          onClick={() => setActiveTab("rankings")}
+          onClick={() => setActiveTab("profiles")}
           className={`flex items-center gap-2 pb-3 px-1 text-sm font-semibold transition border-b-2 whitespace-nowrap cursor-pointer ${
-            activeTab === "rankings"
+            activeTab === "profiles"
               ? "border-indigo-500 text-indigo-400"
               : "border-transparent text-slate-400 hover:text-slate-200"
           }`}
         >
-          <Trophy className="w-4 h-4" />
-          <span>Trait Leaderboards</span>
+          <BarChart3 className="w-4 h-4" />
+          <span>Trait Profiles & Character Stats</span>
         </button>
       </div>
 
@@ -548,7 +545,7 @@ export function GroupView({
                   onClick={handleSkip}
                   className="flex items-center gap-1.5 hover:text-white transition cursor-pointer px-3 py-1.5 rounded-xl hover:bg-slate-800"
                 >
-                  <span>Skip Question</span>
+                  <span>Next Question</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -571,11 +568,11 @@ export function GroupView({
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
                 <button
-                  onClick={() => setActiveTab("rankings")}
+                  onClick={() => setActiveTab("profiles")}
                   className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold text-sm shadow-lg shadow-indigo-500/20 transition cursor-pointer flex items-center justify-center gap-2"
                 >
-                  <Trophy className="w-4 h-4 text-amber-300" />
-                  <span>View Trait Leaderboards</span>
+                  <BarChart3 className="w-4 h-4 text-indigo-300" />
+                  <span>View Trait Profiles & Character Stats</span>
                 </button>
 
                 <button
@@ -591,14 +588,15 @@ export function GroupView({
         </div>
       )}
 
-      {/* TAB 2: Trait Leaderboards & Similarity Force Graph */}
-      {activeTab === "rankings" && (
+      {/* TAB 2: Trait Profiles & RPG Character Stat Sheets */}
+      {activeTab === "profiles" && (
         <div className="space-y-8">
+          {/* Header Bar with Animated Scope Switcher */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-slate-400 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
             <span className="flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
+              <Sliders className="w-4 h-4 text-indigo-400 shrink-0" />
               <span>
-                Showing <strong>{viewScope === "group" ? "Group" : "Global"} Leaderboards</strong> based on pairwise wins.
+                Showing <strong>{viewScope === "group" ? "Group Ratings" : "Global Ratings"}</strong> for each friend's character sheet.
               </span>
             </span>
 
@@ -613,7 +611,7 @@ export function GroupView({
                 }`}
               >
                 <Users className="w-3.5 h-3.5" />
-                <span>Group Rankings</span>
+                <span>Group Scores</span>
               </button>
               <button
                 onClick={() => setViewScope("global")}
@@ -624,7 +622,7 @@ export function GroupView({
                 }`}
               >
                 <Globe className="w-3.5 h-3.5" />
-                <span>Global Rankings</span>
+                <span>Global Scores</span>
               </button>
             </div>
           </div>
@@ -637,98 +635,78 @@ export function GroupView({
             />
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {TRAITS.map((trait) => {
-              const rankings = computeTraitRankings(trait.key);
+          {/* RPG Character Stat Sheets Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {members.map((member) => {
+              const isSelf = member.id === currentProfile.id;
 
               return (
                 <div
-                  key={trait.key}
-                  className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4"
+                  key={member.id}
+                  className="bg-slate-900/90 border border-slate-800 hover:border-indigo-500/40 rounded-3xl p-6 shadow-xl space-y-5 transition duration-300 relative overflow-hidden"
                 >
-                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-                    <div className="flex items-center gap-2.5">
-                      <span
-                        className={`w-7 h-7 rounded-xl font-extrabold text-xs flex items-center justify-center bg-slate-800 ${trait.textColor}`}
-                      >
-                        {trait.letter}
-                      </span>
-                      <div>
-                        <h3 className="text-base font-bold text-white">
-                          {trait.label}
+                  {/* Character Header */}
+                  <div className="flex items-center gap-4 border-b border-slate-800/80 pb-4">
+                    <div className="w-14 h-14 rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden flex items-center justify-center font-extrabold text-xl text-white shrink-0 shadow-md">
+                      {member.avatarUrl ? (
+                        <img
+                          src={member.avatarUrl}
+                          alt={member.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        member.name.charAt(0).toUpperCase()
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xl font-extrabold text-white">
+                          {member.name}
                         </h3>
-                        <p className="text-[11px] text-slate-400">
-                          {trait.desc}
-                        </p>
+                        {isSelf && (
+                          <span className="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full font-bold">
+                            You
+                          </span>
+                        )}
                       </div>
+                      <span className="text-xs text-indigo-400 font-medium">
+                        Big 5 Character Attributes ({viewScope === "group" ? "Group" : "Global"})
+                      </span>
                     </div>
                   </div>
 
-                  <div className="space-y-3 pt-1">
-                    {rankings.map((r, rankIdx) => {
-                      const isSelf = r.profile.id === currentProfile.id;
+                  {/* RPG Stat Bars with Smooth Width Animations */}
+                  <div className="space-y-3.5">
+                    {TRAITS.map((t) => {
+                      const stats = traitStatsMap[t.key]?.[member.id];
+                      const winRate = stats?.winRate ?? 0;
 
                       return (
-                        <div
-                          key={r.profile.id}
-                          className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center shrink-0 ${
-                                rankIdx === 0
-                                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                                  : rankIdx === 1
-                                  ? "bg-slate-300/20 text-slate-300 border border-slate-400/30"
-                                  : rankIdx === 2
-                                  ? "bg-amber-700/20 text-amber-600 border border-amber-700/30"
-                                  : "text-slate-500"
-                              }`}
-                            >
-                              #{rankIdx + 1}
+                        <div key={t.key} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs font-semibold">
+                            <span className="flex items-center gap-1.5 text-slate-200">
+                              <span
+                                className={`w-5 h-5 rounded text-[10px] font-extrabold flex items-center justify-center bg-slate-950 border ${t.borderColor} ${t.textColor}`}
+                              >
+                                {t.letter}
+                              </span>
+                              <span>{t.label}</span>
                             </span>
 
-                            <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 overflow-hidden flex items-center justify-center text-xs font-bold text-slate-200 shrink-0">
-                              {r.profile.avatarUrl ? (
-                                <img
-                                  src={r.profile.avatarUrl}
-                                  alt={r.profile.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                r.profile.name.charAt(0).toUpperCase()
-                              )}
-                            </div>
-
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-sm text-white">
-                                  {r.profile.name}
-                                </span>
-                                {isSelf && (
-                                  <span className="text-[9px] bg-indigo-950 text-indigo-400 px-1.5 py-0.2 rounded font-semibold">
-                                    You
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-[10px] text-slate-400">
-                                {r.wins} W - {r.losses} L ({r.total} votes)
-                              </span>
-                            </div>
+                            <span
+                              className={`font-mono font-bold text-xs ${t.textColor}`}
+                            >
+                              {winRate}%
+                            </span>
                           </div>
 
-                          <div className="text-right">
-                            <span
-                              className={`text-sm font-extrabold font-mono ${trait.textColor}`}
-                            >
-                              {r.winRate}%
-                            </span>
-                            <div className="w-16 bg-slate-900 h-1.5 rounded-full overflow-hidden mt-1 border border-slate-800">
-                              <div
-                                className={`h-full bg-gradient-to-r ${trait.color}`}
-                                style={{ width: `${r.winRate}%` }}
-                              />
-                            </div>
+                          {/* Smooth Animated Bar */}
+                          <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800/80 p-0.5">
+                            <div
+                              className={`h-full rounded-full bg-gradient-to-r ${t.color} transition-all duration-700 ease-out shadow-sm`}
+                              style={{ width: `${winRate}%` }}
+                            />
                           </div>
                         </div>
                       );
