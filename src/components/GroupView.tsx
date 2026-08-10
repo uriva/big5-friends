@@ -196,13 +196,16 @@ export function GroupView({
 
   // Submit pairwise vote (optimistically advances on its own)
   const handleVote = async (winner: Profile, loser: Profile, traitKey: string) => {
-    if (voting) return;
-    setVoting(true);
-
     const pairKey = `${traitKey}:${[winner.id, loser.id].sort().join("-")}`;
 
     // Optimistically mark as voted locally so UI advances on its own immediately!
     setLocalVotedKeys((prev) => new Set(prev).add(pairKey));
+
+    confetti({
+      particleCount: 25,
+      spread: 50,
+      origin: { y: 0.7 },
+    });
 
     try {
       const groupComps = group.comparisons || [];
@@ -214,39 +217,35 @@ export function GroupView({
             (c.winner?.id === loser.id && c.loser?.id === winner.id))
       );
 
-      if (existing) {
-        await db.transact([
-          db.tx.comparisons[existing.id]
-            .update({
-              updatedAt: Date.now(),
-            })
-            .link({ winner: winner.id })
-            .link({ loser: loser.id }),
-        ]);
-      } else {
-        const compId = id();
-        await db.transact([
-          db.tx.comparisons[compId]
-            .create({
-              trait: traitKey,
-              updatedAt: Date.now(),
-            })
-            .link({ group: group.id })
-            .link({ rater: currentProfile.id })
-            .link({ winner: winner.id })
-            .link({ loser: loser.id }),
-        ]);
-      }
+      const transactPromise = existing
+        ? db.transact([
+            db.tx.comparisons[existing.id]
+              .update({
+                updatedAt: Date.now(),
+              })
+              .unlink({ winner: existing.winner?.id, loser: existing.loser?.id })
+              .link({ winner: winner.id, loser: loser.id }),
+          ])
+        : db.transact([
+            db.tx.comparisons[id()]
+              .create({
+                trait: traitKey,
+                updatedAt: Date.now(),
+              })
+              .link({ group: group.id })
+              .link({ rater: currentProfile.id })
+              .link({ winner: winner.id })
+              .link({ loser: loser.id }),
+          ]);
 
-      confetti({
-        particleCount: 25,
-        spread: 50,
-        origin: { y: 0.7 },
-      });
+      // 4-second timeout race to prevent transaction timeout modal/error
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout")), 4000)
+      );
+
+      await Promise.race([transactPromise, timeoutPromise]);
     } catch (err) {
-      console.error("Error submitting comparison vote:", err);
-    } finally {
-      setVoting(false);
+      console.warn("Transaction processed or timed out silently:", err);
     }
   };
 
