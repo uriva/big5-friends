@@ -261,9 +261,22 @@ export function GroupView({
     setQuestionIndex((prev) => Math.max(0, prev - 1));
   };
 
-  const handleResetVotes = () => {
+  const handleResetVotes = async () => {
     setLocalVotedKeys(new Set());
     setQuestionIndex(0);
+
+    const userComps = (group.comparisons || []).filter(
+      (c: any) => c.rater?.id === currentProfile.id
+    );
+
+    if (userComps.length > 0) {
+      try {
+        const txs = userComps.map((c: any) => db.tx.comparisons[c.id].delete());
+        await db.transact(txs);
+      } catch (err) {
+        console.warn("Failed to delete user comparisons:", err);
+      }
+    }
   };
 
   // Filter comparisons based on Scope (Group vs Global)
