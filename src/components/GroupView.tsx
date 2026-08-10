@@ -108,7 +108,7 @@ export function GroupView({
   allComparisons,
 }: GroupViewProps) {
   const [viewScope, setViewScope] = useState<"group" | "global">("group");
-  const [activeTab, setActiveTab] = useState<"compare" | "rankings" | "activity">(
+  const [activeTab, setActiveTab] = useState<"compare" | "rankings">(
     "compare"
   );
 
@@ -377,32 +377,6 @@ export function GroupView({
                 </>
               )}
             </button>
-
-            {/* Scope Switcher: Group vs Global */}
-            <div className="bg-slate-950/90 p-1 border border-slate-800 rounded-2xl flex items-center gap-1">
-              <button
-                onClick={() => setViewScope("group")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
-                  viewScope === "group"
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Group View</span>
-              </button>
-              <button
-                onClick={() => setViewScope("global")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
-                  viewScope === "global"
-                    ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <Globe className="w-3.5 h-3.5" />
-                <span>Global View</span>
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -431,18 +405,6 @@ export function GroupView({
         >
           <Trophy className="w-4 h-4" />
           <span>Trait Leaderboards</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("activity")}
-          className={`flex items-center gap-2 pb-3 px-1 text-sm font-semibold transition border-b-2 whitespace-nowrap cursor-pointer ${
-            activeTab === "activity"
-              ? "border-indigo-500 text-indigo-400"
-              : "border-transparent text-slate-400 hover:text-slate-200"
-          }`}
-        >
-          <Activity className="w-4 h-4" />
-          <span>Activity & Privacy Log</span>
         </button>
       </div>
 
@@ -596,11 +558,39 @@ export function GroupView({
       {/* TAB 2: Trait Leaderboards */}
       {activeTab === "rankings" && (
         <div className="space-y-8">
-          <div className="flex items-center justify-between text-xs text-slate-400 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-slate-400 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
             <span className="flex items-center gap-2">
               <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
-              Showing <strong>{viewScope === "group" ? "Group" : "Global"} Leaderboards</strong> based on pairwise wins.
+              <span>
+                Showing <strong>{viewScope === "group" ? "Group" : "Global"} Leaderboards</strong> based on pairwise wins.
+              </span>
             </span>
+
+            {/* Scope Switcher: Group vs Global */}
+            <div className="bg-slate-950/90 p-1 border border-slate-800 rounded-xl flex items-center gap-1 self-start sm:self-auto">
+              <button
+                onClick={() => setViewScope("group")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                  viewScope === "group"
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Group Rankings</span>
+              </button>
+              <button
+                onClick={() => setViewScope("global")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                  viewScope === "global"
+                    ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>Global Rankings</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -703,61 +693,6 @@ export function GroupView({
                 </div>
               );
             })}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: Activity & Privacy Log */}
-      {activeTab === "activity" && (
-        <div className="space-y-6 max-w-3xl mx-auto">
-          <div className="flex items-center justify-between text-xs text-slate-400 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
-            <span className="flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-purple-400 shrink-0" />
-              <strong>Privacy Protection:</strong> Activity feed confirms participation without revealing individual choices.
-            </span>
-          </div>
-
-          <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
-            <h3 className="text-base font-bold text-white">Recent Comparison Activity</h3>
-
-            <div className="space-y-3">
-              {scopedComparisons
-                .slice()
-                .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-                .slice(0, 15)
-                .map((comp) => {
-                  const raterName = comp.rater?.name || "A friend";
-                  const traitObj = TRAITS.find((t) => t.key === comp.trait);
-                  const timeAgo = comp.updatedAt
-                    ? new Date(comp.updatedAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : "Recently";
-
-                  return (
-                    <div
-                      key={comp.id}
-                      className="flex items-center justify-between text-xs bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800/80"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
-                        <span className="text-slate-300">
-                          <strong className="text-white">{raterName}</strong> completed a pairwise comparison for{" "}
-                          <strong className="text-indigo-400">{traitObj?.label || comp.trait}</strong>
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-slate-500 font-mono">{timeAgo}</span>
-                    </div>
-                  );
-                })}
-
-              {scopedComparisons.length === 0 && (
-                <p className="text-xs text-slate-500 italic py-4 text-center">
-                  No comparison activity recorded yet in this group.
-                </p>
-              )}
-            </div>
           </div>
         </div>
       )}

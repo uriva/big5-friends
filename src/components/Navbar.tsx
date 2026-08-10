@@ -10,6 +10,7 @@ import {
   LogOut,
   ChevronDown,
   Edit3,
+  HelpCircle,
 } from "lucide-react";
 
 interface NavbarProps {
@@ -21,6 +22,7 @@ interface NavbarProps {
   onOpenCreateModal: () => void;
   onOpenJoinModal: () => void;
   onOpenEditProfile: () => void;
+  onOpenExplainer: () => void;
 }
 
 export function Navbar({
@@ -32,6 +34,7 @@ export function Navbar({
   onOpenCreateModal,
   onOpenJoinModal,
   onOpenEditProfile,
+  onOpenExplainer,
 }: NavbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -49,9 +52,13 @@ export function Navbar({
             <span className="font-bold text-white tracking-tight text-base sm:text-lg">
               Big 5 Friends
             </span>
-            <span className="hidden sm:inline-block text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded-full ml-2 font-medium">
-              OCEAN Assessment
-            </span>
+            <button
+              onClick={onOpenExplainer}
+              className="hidden sm:inline-flex items-center gap-1 text-[10px] bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded-full ml-2 font-medium transition cursor-pointer"
+            >
+              <HelpCircle className="w-3 h-3" />
+              <span>What is Big 5?</span>
+            </button>
           </div>
         </div>
 
@@ -121,6 +128,15 @@ export function Navbar({
               </div>
             )}
           </div>
+
+          {/* Explainer button for mobile / tablet */}
+          <button
+            onClick={onOpenExplainer}
+            title="What is Big 5?"
+            className="sm:hidden p-2 rounded-xl text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 cursor-pointer"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
 
           {/* Quick Add buttons for desktop */}
           <button

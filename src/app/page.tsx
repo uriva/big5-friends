@@ -5,12 +5,13 @@ import { db } from "@/lib/db";
 import { AuthScreen } from "@/components/AuthScreen";
 import { ProfileSetupModal } from "@/components/ProfileSetupModal";
 import { ProfileEditModal } from "@/components/ProfileEditModal";
+import { Big5ExplainerModal } from "@/components/Big5ExplainerModal";
 import { Navbar } from "@/components/Navbar";
 import { CreateGroupModal } from "@/components/CreateGroupModal";
 import { JoinGroupModal } from "@/components/JoinGroupModal";
 import { InvitePromptModal } from "@/components/InvitePromptModal";
 import { GroupView } from "@/components/GroupView";
-import { Users, Plus, UserPlus, Sparkles, Loader2 } from "lucide-react";
+import { Users, Plus, UserPlus, Sparkles, Loader2, HelpCircle } from "lucide-react";
 
 export default function Home() {
   const { isLoading: authLoading, user, error: authError } = db.useAuth();
@@ -55,6 +56,7 @@ export default function Home() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [isExplainerOpen, setIsExplainerOpen] = useState(false);
   const [pendingInviteGroup, setPendingInviteGroup] = useState<any | null>(null);
 
   // Derive current profile
@@ -144,6 +146,7 @@ export default function Home() {
         onOpenCreateModal={() => setIsCreateOpen(true)}
         onOpenJoinModal={() => setIsJoinOpen(true)}
         onOpenEditProfile={() => setIsEditProfileOpen(true)}
+        onOpenExplainer={() => setIsExplainerOpen(true)}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
@@ -154,13 +157,20 @@ export default function Home() {
               <Sparkles className="w-8 h-8" />
             </div>
 
-            <div>
-              <h2 className="text-2xl font-extrabold text-white">
+            <div className="space-y-3">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
                 Welcome to Big 5 Friends, {currentProfile.name}!
               </h2>
-              <p className="text-sm text-slate-400 mt-2 max-w-md mx-auto">
-                Create a friend group (e.g. Uri, Yoni, Ran, Asaf) or join an existing group with an invite code to start pairwise Big 5 trait comparisons.
+              <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+                Discover how your friends perceive you and see who you are most similar to through fun, head-to-head Big 5 personality comparisons.
               </p>
+              <button
+                onClick={() => setIsExplainerOpen(true)}
+                className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold bg-indigo-500/10 border border-indigo-500/20 px-3.5 py-1.5 rounded-full transition cursor-pointer"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>How Big 5 Personality Comparisons Work</span>
+              </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto pt-2">
@@ -225,6 +235,11 @@ export default function Home() {
         isOpen={isEditProfileOpen}
         onClose={() => setIsEditProfileOpen(false)}
         profile={currentProfile}
+      />
+
+      <Big5ExplainerModal
+        isOpen={isExplainerOpen}
+        onClose={() => setIsExplainerOpen(false)}
       />
 
       {/* Immediate Join Prompt Modal from Invite Link */}
