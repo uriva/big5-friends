@@ -1,0 +1,40 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4338ca" />
+      <stop offset="35%" stop-color="#6366f1" />
+      <stop offset="70%" stop-color="#7c3aed" />
+      <stop offset="100%" stop-color="#9333ea" />
+    </linearGradient>
+    <linearGradient id="starGrad" x1="160" y1="100" x2="352" y2="412" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#e0e7ff" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  
+  <!-- Squircle Background -->
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad)" />
+  
+  <!-- Subtle border highlight -->
+  <rect x="8" y="8" width="496" height="496" rx="107" stroke="rgba(255,255,255,0.25)" stroke-width="12" fill="none" />
+  
+  <!-- Five Big 5 Traits Constellation Dots -->
+  <circle cx="256" cy="80" r="20" fill="#a5b4fc" />
+  <circle cx="412" cy="190" r="20" fill="#67e8f9" />
+  <circle cx="360" cy="405" r="20" fill="#fde047" />
+  <circle cx="152" cy="405" r="20" fill="#6ee7b7" />
+  <circle cx="100" cy="190" r="20" fill="#fda4af" />
+
+  <!-- Center Primary Sparkle -->
+  <path d="M 256 120 C 256 195 200 256 120 256 C 200 256 256 317 256 392 C 256 317 312 256 392 256 C 312 256 256 195 256 120 Z" fill="url(#starGrad)" filter="url(#glow)" />
+  
+  <!-- Top Right Accent Sparkle -->
+  <path d="M 380 90 C 380 115 360 135 335 135 C 360 135 380 155 380 180 C 380 155 400 135 425 135 C 400 135 380 115 380 90 Z" fill="#ffffff" />
+  
+  <!-- Bottom Left Accent Sparkle -->
+  <path d="M 130 330 C 130 350 115 365 95 365 C 115 365 130 380 130 400 C 130 380 145 365 165 365 C 145 365 130 350 130 330 Z" fill="#ffffff" />
+</svg>
