@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { db, id } from "@/lib/db";
-import { Camera, Upload, Sparkles, AlertCircle } from "lucide-react";
+import { compressImage } from "@/lib/image";
+import { Camera, Upload, Sparkles, AlertCircle, Loader2 } from "lucide-react";
 
 interface ProfileSetupModalProps {
   userId: string;
@@ -14,17 +15,23 @@ export function ProfileSetupModal({ userId, email }: ProfileSetupModalProps) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [processingImage, setProcessingImage] = useState(false);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setError(null);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setAvatarUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    setProcessingImage(true);
+    try {
+      const compressed = await compressImage(file, 256, 0.82);
+      setAvatarUrl(compressed);
+    } catch (err: any) {
+      console.error("Image processing error:", err);
+      setError(err?.message || "Failed to process photo. Please choose a different image.");
+    } finally {
+      setProcessingImage(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,7 +94,12 @@ export function ProfileSetupModal({ userId, email }: ProfileSetupModalProps) {
                     : "border-dashed border-slate-700 group-hover:border-indigo-500"
                 }`}
               >
-                {avatarUrl ? (
+                {processingImage ? (
+                  <div className="flex flex-col items-center text-indigo-400">
+                    <Loader2 className="w-6 h-6 animate-spin mb-1" />
+                    <span className="text-[9px] font-semibold">Processing</span>
+                  </div>
+                ) : avatarUrl ? (
                   <img
                     src={avatarUrl}
                     alt="Preview"
@@ -119,7 +131,11 @@ export function ProfileSetupModal({ userId, email }: ProfileSetupModalProps) {
                 Profile Photo <span className="text-red-400">* Required</span>
               </span>
               <span className="text-[11px] text-slate-500">
-                {avatarUrl ? "Photo selected ✓" : "Click to select a photo from your device"}
+                {processingImage
+                  ? "Optimizing photo..."
+                  : avatarUrl
+                  ? "Photo selected ✓"
+                  : "Click to select a photo from your device"}
               </span>
             </div>
           </div>
@@ -141,7 +157,7 @@ export function ProfileSetupModal({ userId, email }: ProfileSetupModalProps) {
 
           <button
             type="submit"
-            disabled={saving || !name.trim() || !avatarUrl}
+            disabled={saving || processingImage || !name.trim() || !avatarUrl}
             className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 transition disabled:opacity-40 cursor-pointer"
           >
             {saving ? "Saving..." : "Continue to App"}

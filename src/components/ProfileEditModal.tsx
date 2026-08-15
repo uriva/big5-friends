@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { db } from "@/lib/db";
-import { Camera, Upload, X, Check } from "lucide-react";
+import { compressImage } from "@/lib/image";
+import { Camera, Upload, X, Check, Loader2, AlertCircle } from "lucide-react";
 
 interface ProfileEditModalProps {
   isOpen: boolean;
@@ -25,18 +26,26 @@ export function ProfileEditModal({
   );
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [processingImage, setProcessingImage] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setAvatarUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    setError(null);
+    setProcessingImage(true);
+    try {
+      const compressed = await compressImage(file, 256, 0.82);
+      setAvatarUrl(compressed);
+    } catch (err: any) {
+      console.error("Image processing error:", err);
+      setError(err?.message || "Failed to process photo. Please choose a different image.");
+    } finally {
+      setProcessingImage(false);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -44,6 +53,7 @@ export function ProfileEditModal({
     if (!name.trim()) return;
     setSaving(true);
     setSavedSuccess(false);
+    setError(null);
 
     try {
       await db.transact([
@@ -57,8 +67,9 @@ export function ProfileEditModal({
       setTimeout(() => {
         onClose();
       }, 1000);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error updating profile:", err);
+      setError(err?.message || "Failed to update profile. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -81,6 +92,13 @@ export function ProfileEditModal({
           </p>
         </div>
 
+        {error && (
+          <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-semibold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
         {savedSuccess && (
           <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold rounded-xl flex items-center justify-center gap-2">
             <Check className="w-4 h-4" />
@@ -93,7 +111,12 @@ export function ProfileEditModal({
           <div className="flex flex-col items-center gap-3">
             <label className="relative group cursor-pointer">
               <div className="w-24 h-24 rounded-full bg-slate-950 border-2 border-dashed border-slate-700 group-hover:border-indigo-500 overflow-hidden flex items-center justify-center transition shadow-inner">
-                {avatarUrl ? (
+                {processingImage ? (
+                  <div className="flex flex-col items-center text-indigo-400">
+                    <Loader2 className="w-6 h-6 animate-spin mb-1" />
+                    <span className="text-[9px] font-semibold">Processing</span>
+                  </div>
+                ) : avatarUrl ? (
                   <img
                     src={avatarUrl}
                     alt="Profile"
@@ -119,7 +142,7 @@ export function ProfileEditModal({
               />
             </label>
             <span className="text-xs text-slate-400">
-              Click photo to change
+              {processingImage ? "Optimizing photo..." : "Click photo to change"}
             </span>
           </div>
 
@@ -147,7 +170,7 @@ export function ProfileEditModal({
             </button>
             <button
               type="submit"
-              disabled={saving || !name.trim()}
+              disabled={saving || processingImage || !name.trim()}
               className="w-1/2 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/20 transition disabled:opacity-50 cursor-pointer"
             >
               {saving ? "Saving..." : "Save Changes"}
