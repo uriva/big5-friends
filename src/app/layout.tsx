@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://big5-friends.onrender.com"),
+  metadataBase: new URL("https://big5-friends.uriva.deno.net"),
   title: {
     default: "Big 5 Friends - Discover How Friends Perceive You",
     template: "%s | Big 5 Friends",
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     title: "Big 5 Friends - Discover How Friends Perceive You",
     description:
       "Compare Big 5 personality traits in your friend group. See how others perceive you and discover who you are similar to through pairwise comparisons!",
-    url: "https://big5-friends.onrender.com",
+    url: "https://big5-friends.uriva.deno.net",
     siteName: "Big 5 Friends",
     locale: "en_US",
     type: "website",
